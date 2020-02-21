@@ -2,6 +2,7 @@ import unittest
 import mock
 
 from cpm.domain.project_loader import ProjectLoader
+from cpm.domain.project_loader import InvalidProjectSchema
 from cpm.domain.project_loader import NotAChromosProject
 from cpm.domain.project import Project, Package
 from cpm.domain.plugin import Plugin
@@ -14,6 +15,7 @@ class TestProjectLoader(unittest.TestCase):
         yaml_handler = mock.MagicMock()
         filesystem = mock.MagicMock()
         ProjectLoader(yaml_handler, filesystem)
+        mock.patch
 
     def test_loading_project_raises_exception_when_project_descriptor_does_not_exist(self):
         yaml_handler = mock.MagicMock()
@@ -23,59 +25,85 @@ class TestProjectLoader(unittest.TestCase):
 
         self.assertRaises(NotAChromosProject, loader.load)
 
-    def test_loading_project_without_targets(self):
+    @mock.patch('cpm.domain.project_schema.is_valid')
+    def test_loading_project_raises_exception_when_project_descriptor_has_invalid_schema(self, is_valid):
         yaml_handler = mock.MagicMock()
         filesystem = mock.MagicMock()
         yaml_handler.load.return_value = {
             'project_name': 'Project'
         }
         loader = ProjectLoader(yaml_handler, filesystem)
+        is_valid.return_value = False
 
-        loaded_project = loader.load()
+        self.assertRaises(InvalidProjectSchema, loader.load)
+
+    @mock.patch('cpm.domain.project_schema.is_valid')
+    def test_parsing_project_description_with_valid_schema(self, is_valid):
+        yaml_handler = mock.MagicMock()
+        filesystem = mock.MagicMock()
+        yaml_handler.load.return_value = {
+            'project_name': 'Project'
+        }
+        is_valid.return_value = True
+        loader = ProjectLoader(yaml_handler, filesystem)
+
+        project = loader.load()
 
         yaml_handler.load.assert_called_once_with(PROJECT_ROOT_FILE)
-        assert loaded_project.name == 'Project'
+        assert project.name == 'Project'
 
-    def test_loading_project_with_one_package(self):
+    def test_parsing_project_description_without_targets(self):
+        yaml_handler = mock.MagicMock()
+        filesystem = mock.MagicMock()
+        project_description = {
+            'project_name': 'Project'
+        }
+        loader = ProjectLoader(yaml_handler, filesystem)
+
+        project = loader.parse_project_description(project_description)
+
+        assert project.name == 'Project'
+
+    def test_parsing_project_description_with_one_package(self):
         yaml_handler = mock.MagicMock()
         filesystem = mock.MagicMock()
         filesystem.find.return_value = []
         filesystem.parent_directory.return_value = '.'
-        yaml_handler.load.return_value = {
+        project_description = {
             'project_name': 'Project',
             'packages': {'cpm-hub': None},
         }
         loader = ProjectLoader(yaml_handler, filesystem)
 
-        project = loader.load()
+        project = loader.parse_project_description(project_description)
 
         assert project.name == 'Project'
         assert Package(path='cpm-hub') in project.packages
         assert project.include_directories == ['.']
 
-    def test_loading_project_with_one_package_with_cflags(self):
+    def test_parsing_project_description_with_one_package_with_cflags(self):
         yaml_handler = mock.MagicMock()
         filesystem = mock.MagicMock()
         filesystem.find.return_value = []
-        yaml_handler.load.return_value = {
+        project_description = {
             'project_name': 'Project',
             'packages': {
                 'cpm-hub': {
                     'cflags': ['-std=c++11']
                 }
-            },
+            }
         }
         loader = ProjectLoader(yaml_handler, filesystem)
 
-        project = loader.load()
+        project = loader.parse_project_description(project_description)
 
         assert Package(path='cpm-hub', cflags=['-std=c++11']) in project.packages
 
-    def test_loading_project_with_with_ldflags(self):
+    def test_parsing_project_description_with_with_ldflags(self):
         yaml_handler = mock.MagicMock()
         filesystem = mock.MagicMock()
         filesystem.find.return_value = []
-        yaml_handler.load.return_value = {
+        project_description = {
             'project_name': 'Project',
             'link_options': {
                 'libraries': ['pthread']
@@ -83,14 +111,14 @@ class TestProjectLoader(unittest.TestCase):
         }
         loader = ProjectLoader(yaml_handler, filesystem)
 
-        project = loader.load()
+        project = loader.parse_project_description(project_description)
 
         assert 'pthread' in project.link_options.libraries
 
-    def test_loading_project_with_one_target(self):
+    def test_parsing_project_description_with_one_target(self):
         yaml_handler = mock.MagicMock()
         filesystem = mock.MagicMock()
-        yaml_handler.load.return_value = {
+        project_description = {
             'project_name': 'Project',
             'targets': {
                 'ubuntu': {},
@@ -98,13 +126,13 @@ class TestProjectLoader(unittest.TestCase):
         }
         loader = ProjectLoader(yaml_handler, filesystem)
 
-        loaded_project = loader.load()
+        project = loader.parse_project_description(project_description)
 
-        assert loaded_project.name == 'Project'
-        assert 'ubuntu' in loaded_project.targets
+        assert project.name == 'Project'
+        assert 'ubuntu' in project.targets
 
     @mock.patch('cpm.domain.project_loader.PluginLoader')
-    def test_loading_project_with_one_plugin(self, PluginLoader):
+    def test_parsing_project_description_with_one_plugin(self, PluginLoader):
         filesystem = mock.MagicMock()
         plugin = Plugin('cest', '2.3')
         plugin.add_include_directory('plugins/cest')
@@ -112,13 +140,13 @@ class TestProjectLoader(unittest.TestCase):
         plugin_loader.load.return_value = plugin
         PluginLoader.return_value = plugin_loader
         yaml_handler = mock.MagicMock()
-        yaml_handler.load.return_value = {
+        project_description = {
             'project_name': 'Project',
             'plugins': {'cest': '2.3'}
         }
         loader = ProjectLoader(yaml_handler, filesystem)
 
-        loaded_project = loader.load()
+        loaded_project = loader.parse_project_description(project_description)
 
         assert loaded_project.name == 'Project'
         assert loaded_project.plugins == [

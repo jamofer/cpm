@@ -3,6 +3,7 @@ from cpm.domain.project import PROJECT_ROOT_FILE
 from cpm.domain.project import Package
 from cpm.domain.project import Project
 from cpm.domain.project import Target
+from cpm.domain import project_schema
 
 
 class ProjectLoader(object):
@@ -14,25 +15,32 @@ class ProjectLoader(object):
     def load(self):
         try:
             description = self.yaml_handler.load(PROJECT_ROOT_FILE)
-            project = Project(description['project_name'])
-            project.add_sources(['main.cpp'])
-            for package in self.project_packages(description):
-                project.add_package(package)
-                project.add_include_directory(self.filesystem.parent_directory(package.path))
-                project.add_sources(package.sources)
-            project.add_tests(self.test_suites())
-            for target in self.described_targets(description):
-                project.add_target(target)
-            for plugin in self.load_plugins(description):
-                project.add_plugin(plugin)
-                project.add_sources(plugin.sources)
-                for directory in plugin.include_directories:
-                    project.add_include_directory(directory)
-            for library in self.link_libraries(description):
-                project.add_library(library)
-            return project
         except FileNotFoundError:
             raise NotAChromosProject()
+
+        if not project_schema.is_valid(description):
+            raise InvalidProjectSchema()
+
+        return self.parse_project_description(description)
+
+    def parse_project_description(self, description):
+        project = Project(description['project_name'])
+        project.add_sources(['main.cpp'])
+        for package in self.project_packages(description):
+            project.add_package(package)
+            project.add_include_directory(self.filesystem.parent_directory(package.path))
+            project.add_sources(package.sources)
+        project.add_tests(self.test_suites())
+        for target in self.described_targets(description):
+            project.add_target(target)
+        for plugin in self.load_plugins(description):
+            project.add_plugin(plugin)
+            project.add_sources(plugin.sources)
+            for directory in plugin.include_directories:
+                project.add_include_directory(directory)
+        for library in self.link_libraries(description):
+            project.add_library(library)
+        return project
 
     def described_targets(self, description):
         if 'targets' in description:
@@ -80,4 +88,8 @@ class ProjectLoader(object):
 
 
 class NotAChromosProject(RuntimeError):
+    pass
+
+
+class InvalidProjectSchema(RuntimeError):
     pass

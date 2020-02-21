@@ -1,0 +1,79 @@
+{
+  "$id": "to_be_defined",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CPM Project",
+  "type": "object",
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "description": "The project name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Project description."
+    },
+    "version": {
+      "type": "string",
+      "description": "Project version."
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+          "$ref": "#/definitions/Package"
+      },
+      "description": "The list of packages defined for the project."
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+          "$ref": "#/definitions/Plugin"
+      },
+      "description": "The list of packages defined for the project."
+    },
+    "link_options": {
+      "type": "object",
+      "properties": {
+        "libraries": {
+          "$ref": "#/definitions/ListOfString"
+        }
+      }
+    }
+  },
+  "required": ["project_name"],
+  "definitions": {
+    "Package": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "cflags": {
+                  "$ref": "#/definitions/ListOfString"
+                }
+              }
+            },
+            {"type": "null"}
+          ]
+        },
+        "additionalProperties": false
+      }
+    },
+    "Plugin": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+            "type": "string"
+        },
+        "additionalProperties": false
+      }
+    },
+    "ListOfString": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
