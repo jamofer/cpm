@@ -1,52 +1,99 @@
 import unittest
 import mock
 
+from cpm.domain.project import Project
 from cpm.domain.sample_code import CPP_HELLO_WORLD
 from cpm.domain.creation_service import CreationService
 from cpm.domain.creation_service import CreationOptions
+from cpm.domain.project.project_descriptor_parser import NotACpmProject
 
 
 class TestCreationService(unittest.TestCase):
-    def test_project_constructor_instantiation(self):
-        filesystem = mock.MagicMock()
-        CreationService(filesystem)
+    def test_it_instantiation(self):
+        project_loader = mock.MagicMock()
+        CreationService(project_loader)
 
-    def test_project_constructor_verifies_if_project_exists(self):
-        filesystem = mock.MagicMock()
-        filesystem.directory_exists.return_value = True
-        creation_service = CreationService(filesystem)
+    def test_project_exists_when_loading_the_project_succeeds(self):
+        project_loader = mock.MagicMock()
+        project_loader.load.return_value = Project('dummy')
+        creation_service = CreationService(project_loader)
+        directory = '.'
 
-        assert creation_service.exists('some project')
+        assert creation_service.exists(directory)
+        project_loader.load.assert_called_once_with(directory)
 
-    def test_project_constructor_creates_directory_and_descriptor_file_when_creating_project(self):
-        filesystem = mock.MagicMock()
-        creation_service = CreationService(filesystem)
+    def test_project_does_not_exist_when_loading_the_project_fails(self):
+        project_loader = mock.MagicMock()
+        project_loader.load.side_effect = NotACpmProject
+        creation_service = CreationService(project_loader)
+        directory = 'project_location'
 
-        creation_service.create('AwesomeProject', CreationOptions(generate_sample_code=False))
+        assert not creation_service.exists(directory)
+        project_loader.load.assert_called_once_with(directory)
+
+    @mock.patch('cpm.domain.creation_service.filesystem')
+    def test_it_creates_directory_and_descriptor_file_when_creating_project(self, filesystem):
+        project_loader = mock.MagicMock()
+        creation_service = CreationService(project_loader)
+        creation_options = CreationOptions(
+            generate_sample_code=False,
+            directory='AwesomeProject',
+            project_name='AwesomeProject'
+        )
+
+        creation_service.create(creation_options)
 
         filesystem.create_directory.assert_called_once_with('AwesomeProject')
         filesystem.create_file.assert_called_once_with(
             'AwesomeProject/project.yaml',
-            'name: AwesomeProject\n'
+            mock.ANY
         )
-        
-    def test_creation_service_generates_default_sample_code_when_selected(self):
-        filesystem = mock.MagicMock()
-        creation_service = CreationService(filesystem)
 
-        creation_service.create('AwesomeProject')
+    @mock.patch('cpm.domain.creation_service.filesystem')
+    def test_it_only_creates_descriptor_file_when_creating_project_from_existing_sources(self, filesystem):
+        project_loader = mock.MagicMock()
+        creation_service = CreationService(project_loader)
+        creation_options = CreationOptions(
+            generate_sample_code=False,
+            directory='.',
+            project_name='AwesomeProject',
+            init_from_existing_sources=True
+        )
+
+        creation_service.create(creation_options)
+
+        filesystem.create_directory.assert_not_called()
+        filesystem.create_file.assert_called_once_with(
+            './project.yaml',
+            mock.ANY
+        )
+
+    @mock.patch('cpm.domain.creation_service.filesystem')
+    def test_creation_service_generates_default_sample_code_when_selected(self, filesystem):
+        project_loader = mock.MagicMock()
+        creation_service = CreationService(project_loader)
+        creation_options = CreationOptions(
+            directory='AwesomeProject',
+            project_name='AwesomeProject'
+        )
+
+        creation_service.create(creation_options)
 
         filesystem.create_file.assert_called_with(
             'AwesomeProject/main.cpp',
             CPP_HELLO_WORLD
         )
 
-    def test_creation_service_returns_generated_project(self):
-        filesystem = mock.MagicMock()
-        creation_service = CreationService(filesystem)
+    @mock.patch('cpm.domain.creation_service.filesystem')
+    def test_creation_service_returns_generated_project(self, filesystem):
+        project_loader = mock.MagicMock()
+        creation_service = CreationService(project_loader)
+        creation_options = CreationOptions(
+            project_name='AwesomeProject'
+        )
 
-        project = creation_service.create('AwesomeProject', CreationOptions(generate_sample_code=True))
+        project = creation_service.create(creation_options)
 
         assert project.name == 'AwesomeProject'
-        assert project.sources == ['main.cpp']
+        assert project.build.sources == ['main.cpp']
 
